@@ -1,0 +1,35 @@
+# {{ schema.name }} (Version: {{ schema.version }})
+
+{{ schema.description }}
+
+## File Overview:
+
+| File Path | Description | Section Name |
+|-----------|-------------|--------------|
+{% for element in schema.elements -%}
+  {% for condition, files in element.items() -%}
+    {% if condition not in ['section_title', 'section_description'] -%}
+      {% for file in files -%}
+| {{ file.path if file.path else 'N/A' }} | {{ file.description if file.description else 'No Description' }} | {{ element.section_title }} |
+      {% endfor %}
+    {%- endif %}
+  {%- endfor %}
+{%- endfor %}
+
+## Detailed Elements:
+
+{% for element in schema.elements -%}
+### {{ element.section_title }}
+
+{{ element.section_description }}
+
+| File Path | Description | Schema Reference |
+|-----------|-------------|------------------|
+  {% for condition, files in element.items() -%}
+    {% if condition not in ['section_title', 'section_description'] -%}
+      {% for file in files -%}
+| {{ file.path if file.path else 'N/A' }} | {{ file.description if file.description else 'No Description' }} | {{ file.schema if file.schema else 'None' }} |
+      {% endfor %}
+    {%- endif %}
+  {%- endfor %}
+{%- endfor %}

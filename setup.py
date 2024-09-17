@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="zipschema",
-    version="0.1.0",
+    version="0.1.2",
     packages=find_packages(),
     include_package_data=True,
     install_requires=[
@@ -17,15 +17,16 @@ setup(
             'zs=zipschema.zipschema:cli'
         ],
     },
-    author="Your Name",
+    author="Sean Hummel",
     description="CLI tool for validating zipschema files and generating documentation.",
     long_description=open('README.md').read(),
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/zipschema",
+    url="https://github.com/mrmessagewriter/zipschema",
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
+        "Topic :: File Formats :: YAML"
     ],
     python_requires='>=3.6',
 )

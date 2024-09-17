@@ -1,0 +1,19 @@
+name: "Sample Zip Schema"
+description: "A schema for validating zip files containing project configurations."
+version: "1.0.0"
+elements:
+  - section_title: "Required Files"
+    section_description: "These files must be present."
+    allOf:
+      - path: "config/config.json"
+        title: "Configuration File"
+        description: "The main configuration file."
+        schema: "config_schema.json"
+      - path: "docs/README.md"
+        title: "README File"
+        description: "The project documentation."
+  - section_title: "Optional Files"
+    section_description: "These files are optional but can be included."
+    allowed:
+      - path: "logs/logfile.txt"
+      - path: "reports/report.pdf"

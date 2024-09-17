@@ -116,49 +116,26 @@ def validate_jsonschema_file(file_item, matching_files, zip_contents):
 
 
 # Generate documentation from the zipschema in Markdown or AsciiDoc
-def generate_documentation(schema, output_format):
-    doc_template = """
-    # {{ schema.name }} (Version: {{ schema.version }})
+def generate_documentation(schema, output_path, output_format="markdown"):
+    # Load the Jinja template from the file
+    template_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "jinja2/generator_template.jinja2")
 
-    {{ schema.description }}
+    with open(template_path, 'r') as template_file:
+        doc_template = template_file.read()
 
-    ## File Overview:
-
-    | File Path | Description | Conditional |
-    |-----------|-------------|-------------|
-    {% for element in schema.elements %}
-      {% for file in element[element | first] %}
-    | {{ file.link if file.link else file.path }} | {{ file.description if file.description else 'No Description' }} | {{ element | first }} |
-      {% endfor %}
-    {% endfor %}
-
-    ## Detailed Elements:
-
-    {% for element in schema.elements %}
-    ### {{ element.section_title }} ({{ element | first }})
-
-    {{ element.section_description }}
-
-    | File Path | Description | Schema Reference |
-    |-----------|-------------|------------------|
-    {% for file in element[element | first] %}
-    | {{ '[{}]({})'.format(file.path, file.link) if file.link else file.path }} | {{ file.description if file.description else 'No Description' }} | {{ file.schema if file.schema else 'None' }} |
-    {% endfor %}
-    {% endfor %}
-    """
-
+    # Render the template with the schema data
     template = Template(doc_template)
     documentation = template.render(schema=schema)
+    outlines = []
+    lines = documentation.splitlines()
+    for line in lines:
+        outlines.append(line.lstrip())
+    documentation = "\n".join(outlines)
 
-    if output_format == 'markdown':
-        output_file = 'schema_documentation.md'
-    else:
-        output_file = 'schema_documentation.adoc'
+    with open(output_path, "w") as file:
+        file.write(documentation)  # Strip any leading whitespace
 
-    with open(output_file, 'w') as file:
-        file.write(documentation)
-
-    print(f"Documentation generated: {output_file}")
+    print(f"Documentation generated: {output_path}")
 
 
 @click.group()
@@ -195,13 +172,14 @@ def validate_zip(schema_path, zip_path):
 
 @cli.command()
 @click.argument('schema_path')
+@click.argument('output_path', default='schema_output.md')
 @click.option('--format', type=click.Choice(['markdown', 'asciidoc']), default='markdown')
-def generate_docs(schema_path, format):
+def generate_docs(schema_path, output_path, format):
     """Generate documentation from a zipschema."""
     try:
         schema = load_yaml(schema_path)
         validate_zipschema(schema)  # Validate the schema before generating docs
-        generate_documentation(schema, format)
+        generate_documentation(schema, output_path, format)
     except Exception as e:
         print(f"Error: {e}")
 
