@@ -28,11 +28,10 @@ def generate_file_tree(schema_data):
         current = file_tree
         total = len(parts)
         for i, part in enumerate(parts):
-            if total > 1:
-                if i+1 < total:
-                    current = current.setdefault(f"{part}/", {})
-                else:
-                    current = current.setdefault(f"{part}", {})
+            if i+1 < total:
+                current = current.setdefault(f"{part}/", {})
+            else:
+                current = current.setdefault(f"{part}", {})
 
     # Convert file tree to string representation
     def tree_to_string(tree, indent=0):
@@ -157,6 +156,7 @@ def format_description_markdown(description):
 def format_description_docx(doc, description):
     if isinstance(description, list):
         for line in description:
+            line = line.replace("<br>", "\n")
             doc.add_paragraph(line)  # Each string in the list as a separate paragraph
     else:
         doc.add_paragraph(description)
@@ -225,6 +225,7 @@ def generate_docx_with_tree(schema_data, output_file):
     # Description
     format_description_docx(doc, schema_data['description'])
 
+    doc.add_page_break()
     # File Tree Section
     doc.add_heading('File Tree', level=1)
     file_tree = generate_file_tree(schema_data)
@@ -250,6 +251,8 @@ def generate_docx_with_tree(schema_data, output_file):
     # Add borders to table
     add_borders_to_cells(table)
 
+    doc.add_section()
+
     # Section List
     for element in schema_data.get('elements', []):
         # Section Title
@@ -261,7 +264,16 @@ def generate_docx_with_tree(schema_data, output_file):
             if key in element:
                 doc.add_heading(f"{key}:", level=3)
                 for item in element[key]:
-                    doc.add_paragraph(f"File: {item['path']}\nDescription: {item['description']}")
+                    p = doc.add_paragraph()
+                    if item.get("description") is not None:
+                        p.add_run(f"{item['path']}\n").bold = True
+                        p.add_run(f"{item['description']}")
+                    else:
+                        if item.get("summary") is not None:
+                            p.add_run(f"{item['path']}: ").bold = True
+                            p.add_run(f"{item['summary']}")
+                        else:
+                            p.add_run(f"'{item['path']}' ").bold = True
 
     doc.save(output_file)
 
