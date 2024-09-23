@@ -1,179 +1,60 @@
+# ZIPSchema Format : v1.0.1
 
-# Zipschema Documentation with Examples
+The `zipschema` format is a YAML-based schema used for defining, and validating the
+contents of a zipfile *METAFORMAT*. It allows defining required, optional, 
+and prohibited files, as well as the ability to validate individual 
+files using JSON schemas or additional zipschemas.
 
-This document describes the fields of the `zipschema`, a schema for validating the contents of ZIP files, along with examples.
+This enables checking of JSONSchema, and ZipSchema files based
+files in the zip file as well.   
 
-## Top-level Fields
+Zipschema was created as a way to also generate documentation,
+which more easily communicates the metaformat. Otherwise it's easy for developers
+or AI's to get details wrong.
 
-### `name` (string)
-- **Description**: The name of the zipschema.
-- **Example**:
-    ```yaml
-    name: "Sample Zip Schema"
-    ```
+## Top-Level Fields
 
-### `description` (string)
-- **Description**: A description of the zipschema.
-- **Example**:
-    ```yaml
-    description: "A schema for validating zip files containing project configurations."
-    ```
-
-### `version` (string)
-- **Description**: The version number of the zipschema.
-- **Example**:
-    ```yaml
-    version: "1.0.0"
-    ```
-
-### `elements` (array)
-- **Description**: A list of elements that define the structure and constraints for the files inside the ZIP archive.
-- **Example**:
-    ```yaml
-    elements:
-      - section_title: "Required Files"
-        section_description: "These files must be present."
-        allOf:
-          - path: "config/config.json"
-          - path: "docs/README.md"
-    ```
+- **name**: A string representing the name of the schema.
+- **description**: A string that describes the purpose of the schema.
+- **version**: A string representing the schema version.
+- **elements**: An array of objects that define the file structure and validation rules. Each object contains the following fields:
 
 ## Element Fields
 
-Each element in the `elements` array can contain the following fields:
+### section_title
+- **Type**: string
+- **Description**: The title of the section (e.g., "Required Files", "Optional Files").
 
-### `section_title` (string)
-- **Description**: The title of the section for this set of conditions.
-- **Example**:
-    ```yaml
-    section_title: "Required Files"
-    ```
+### section_description
+- **Type**: string
+- **Description**: A description of the section, explaining its purpose.
 
-### `section_description` (string)
-- **Description**: A description of the section.
-- **Example**:
-    ```yaml
-    section_description: "These files are mandatory and must be present in the zip file."
-    ```
+### allOf / anyOf / oneOf / noneOf / allowed
+Each of these conditionals defines a list of file items. The conditionals have the following meanings:
 
-### `allOf` (array)
-- **Description**: A set of files that must all be present.
-- **Items**: Each item in the `allOf` array is an object that describes a file.
-- **Example**:
-    ```yaml
-    allOf:
-      - path: "config/config.json"
-      - path: "docs/README.md"
-    ```
+- **allOf**: All files in the list must be present in the zip file.
+- **anyOf**: At least one file from the list must be present.
+- **oneOf**: Exactly one file from the list must be present.
+- **noneOf**: Files in this list must not be present.
+- **allowed**: These files are optional and will not be validated but will be documented.
 
-### `anyOf` (array)
-- **Description**: At least one of the files in this list must be present.
-- **Items**: Each item in the `anyOf` array is an object that describes a file.
-- **Example**:
-    ```yaml
-    anyOf:
-      - path: "images/logo.png"
-      - path: "images/logo.jpg"
-    ```
+Each file item in these conditionals has the following fields:
 
-### `oneOf` (array)
-- **Description**: Exactly one file from this list must be present.
-- **Items**: Each item in the `oneOf` array is an object that describes a file.
-- **Example**:
-    ```yaml
-    oneOf:
-      - path: "data/dataset.csv"
-      - path: "data/dataset.json"
-    ```
+### path
+- **Type**: string
+- **Description**: The path of the file in the zip file.
 
-### `noneOf` (array)
-- **Description**: None of the files in this list should be present.
-- **Items**: Each item in the `noneOf` array is an object that describes a file.
-- **Example**:
-    ```yaml
-    noneOf:
-      - path: "temp/*.tmp"
-      - path: "backup/*.bak"
-    ```
+### schema
+- **Type**: string
+- **Description**: Optional. Can be one of the following:
+  - `self`: Indicates that the current zipschema should be applied to the specified file.
+  - A path to a `zipschema`: Recursively validates the specified file using another zipschema.
+  - A path to a `jsonschema`: Validates the specified file using a JSON schema.
 
-### `allowed` (array)
-- **Description**: A set of optional files that are allowed but not required.
-- **Items**: Each item in the `allowed` array is an object that describes a file.
-- **Example**:
-    ```yaml
-    allowed:
-      - path: "logs/logfile.txt"
-      - path: "reports/report.pdf"
-    ```
+### description
+- **Type**: string
+- **Description**: A description of the file and its purpose.
 
-## File Item Fields
-
-Each file in the `allOf`, `anyOf`, `oneOf`, `noneOf`, or `allowed` arrays is an object that can contain the following fields:
-
-### `path` (string)
-- **Description**: The file path or pattern to match files inside the ZIP archive.
-- **Example**:
-    ```yaml
-    path: "config/config.json"
-    ```
-
-### `title` (string)
-- **Description**: The title of the file.
-- **Example**:
-    ```yaml
-    title: "Configuration File"
-    ```
-
-### `description` (string)
-- **Description**: A description of the file.
-- **Example**:
-    ```yaml
-    description: "The main configuration file for the project."
-    ```
-
-### `schema` (string)
-- **Description**: A reference to an external schema that should be used to validate this file.
-- **Example**:
-    ```yaml
-    schema: "config_schema.json"
-    ```
-
-### `link` (string)
-- **Description**: A link to the file, either a URL or a path for documentation purposes.
-- **Example**:
-    ```yaml
-    link: "https://example.com/config-schema"
-    ```
-
-## Required Fields
-
-The following fields are required in the `zipschema`:
-- `name`
-- `description`
-- `version`
-- `elements`
-
-Each `fileItem` object must include the `path` field.
-
-- **Example of a full zipschema**:
-    ```yaml
-    name: "Sample Zip Schema"
-    description: "A schema for validating zip files containing project configurations."
-    version: "1.0.0"
-    elements:
-      - section_title: "Required Files"
-        section_description: "These files must be present."
-        allOf:
-          - path: "config/config.json"
-            title: "Configuration File"
-            description: "The main configuration file."
-            schema: "config_schema.json"
-          - path: "docs/README.md"
-            title: "README File"
-            description: "The project documentation."
-      - section_title: "Optional Files"
-        section_description: "These files are optional but can be included."
-        allowed:
-          - path: "logs/logfile.txt"
-          - path: "reports/report.pdf"
-    ```
+### summary
+- **Type**: string
+- **Description**: A brief summary of the file, which is used in documentation generation.

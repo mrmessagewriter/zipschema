@@ -1,0 +1,63 @@
+# Reference zipschema file for the ZipSchema YAML format.
+# version 1
+name: string
+description: string
+version: string
+elements:
+  type: array
+  items:
+    type: object
+    properties:
+      section_title:
+        type: string
+      section_description:
+        type: string
+      allOf:
+        type: array
+        items:
+          type: object
+          properties:
+            path: string
+            schema:
+              type: string
+              description: Can be "self", a path to a zipschema, or a path to a jsonschema
+            description: string
+            summary: string
+      anyOf:
+        type: array
+        items:
+          type: object
+          properties:
+            path: string
+            schema:
+              type: string
+              description: Can be "self", a path to a zipschema, or a path to a jsonschema
+            description: string
+            summary: string
+      oneOf:
+        type: array
+        items:
+          type: object
+          properties:
+            path: string
+            schema:
+              type: string
+              description: Can be "self", a path to a zipschema, or a path to a jsonschema
+            description: string
+            summary: string
+      noneOf:
+        type: array
+        items:
+          type: object
+          properties:
+            path: string
+            description: string
+            summary: string
+      allowed:
+        type: array
+        items:
+          type: object
+          properties:
+            path: string
+            description: string
+            summary: string
