@@ -7,6 +7,8 @@
 
 A sample schema for validating zip files, including various conditionals, schema references, and file patterns.
 
+Description Line 2
+
 ## File Tree
 - config/
   - config.json

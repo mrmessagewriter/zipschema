@@ -1,5 +1,7 @@
 name: Sample Zip Schema
-description: A sample schema for validating zip files, including various conditionals, schema references, and file patterns.
+description:
+  - "A sample schema for validating zip files, including various conditionals, schema references, and file patterns."
+  - "Description Line 2"
 version: 1.0.0
 
 elements:

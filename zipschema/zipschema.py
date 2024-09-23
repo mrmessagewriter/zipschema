@@ -146,6 +146,22 @@ def add_borders_to_cells(table):
             tcPr.append(tcBorders)
 
 
+# Helper function to handle description output for Markdown
+def format_description_markdown(description):
+    if isinstance(description, list):
+        return "\n\n".join(description)  # Each string in the list on a new line
+    return description
+
+
+# Helper function to handle description output for DOCX
+def format_description_docx(doc, description):
+    if isinstance(description, list):
+        for line in description:
+            doc.add_paragraph(line)  # Each string in the list as a separate paragraph
+    else:
+        doc.add_paragraph(description)
+
+
 # Generate Markdown documentation with file table, section/conditional headings, and file items
 def generate_markdown_with_tree(schema_data, output_file):
     file_tree = generate_file_tree(schema_data)
@@ -154,8 +170,6 @@ def generate_markdown_with_tree(schema_data, output_file):
 # {{ schema.name }}
 
 **Version:** {{ schema.version }}
-
-**Description:**
 
 {{ schema.description }}
 
@@ -176,7 +190,7 @@ def generate_markdown_with_tree(schema_data, output_file):
 ## Section List
 {% for element in schema.elements %}
 ### {{ element.section_title }}
-{{ element.section_description }}
+{{ format_description_markdown(element.section_description) }}
 
 {% for key, items in element.items() if key in ['allOf', 'anyOf', 'oneOf', 'noneOf', 'allowed'] %}
 #### {{ key }}
@@ -189,7 +203,10 @@ def generate_markdown_with_tree(schema_data, output_file):
 
     env = jinja2.Environment(loader=jinja2.BaseLoader, trim_blocks=True, lstrip_blocks=True)
     template = env.from_string(template)
-    markdown_output = template.render(schema=schema_data, file_tree=file_tree)
+    if "description" in schema_data:
+        schema_data["description"] = format_description_markdown(schema_data["description"])
+    markdown_output = template.render(schema=schema_data, file_tree=file_tree,
+                                      format_description_markdown=format_description_markdown)
 
     with open(output_file, 'w') as md_file:
         md_file.write(markdown_output)
@@ -206,13 +223,8 @@ def generate_docx_with_tree(schema_data, output_file):
     doc.add_paragraph(f"Version: {schema_data['version']}")
 
     # Description
-    if type(schema_data['description']) == type(list):
-        for item in schema_data['description']:
-            doc.add_paragraph(item)
-    else:
-        doc.add_paragraph(schema_data['description'])
+    format_description_docx(doc, schema_data['description'])
 
-    doc.add_page_break()
     # File Tree Section
     doc.add_heading('File Tree', level=1)
     file_tree = generate_file_tree(schema_data)
@@ -237,25 +249,19 @@ def generate_docx_with_tree(schema_data, output_file):
 
     # Add borders to table
     add_borders_to_cells(table)
-    doc.add_page_break()
 
     # Section List
     for element in schema_data.get('elements', []):
         # Section Title
-        doc.add_heading(element['section_title'], level=1)
-        doc.add_paragraph(element['section_description'])
+        doc.add_heading(element['section_title'], level=2)
+        format_description_docx(doc, element['section_description'])
 
         # Conditional sub-sections (allOf, anyOf, oneOf, noneOf, allowed)
         for key in ['allOf', 'anyOf', 'oneOf', 'noneOf', 'allowed']:
             if key in element:
-                doc.add_heading(f"{key}:", level=2)
+                doc.add_heading(f"{key}:", level=3)
                 for item in element[key]:
-                    doc.add_paragraph().add_run(f"{item['path']}").bold = True
-                    doc.add_paragraph(f"\t{item['description']}")
-                    if item.get('schema') is not None:
-                        p = doc.add_paragraph()
-                        p.add_run("\tschema: ").bold = True
-                        p.add_run(item['schema']).italic = True
+                    doc.add_paragraph(f"File: {item['path']}\nDescription: {item['description']}")
 
     doc.save(output_file)
 
