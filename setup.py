@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="zipschema",
-    version="1.0.1",
+    version="1.0.2",
     packages=find_packages(),
     include_package_data=True,
     install_requires=[
@@ -13,8 +13,8 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'zipschema=zipschema.zipschema:cli',
-            'zs=zipschema.zipschema:cli'
+            'zipschema=zipschema.zipschema:main',
+            'zs=zipschema.zipschema:main'
         ],
     },
     author="Sean Hummel",
