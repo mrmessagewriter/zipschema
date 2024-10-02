@@ -11,12 +11,12 @@ from argparse import ArgumentParser
 
 
 # Helper function to create a file tree
-def generate_file_tree(schema_data):
+def generate_file_tree(schema_data, as_text=True):
     file_paths = []
 
     # Collect all file paths
     for element in schema_data.get('elements', []):
-        for key in ['allOf', 'anyOf', 'oneOf', 'noneOf', 'allowed']:
+        for key in ['allOf', 'anyOf', 'oneOf', 'noneOf', 'allowed', 'canContain']:
             if key in element:
                 for item in element[key]:
                     file_paths.append(item['path'])
@@ -41,7 +41,9 @@ def generate_file_tree(schema_data):
             result += tree_to_string(subtree, indent + 1)
         return result
 
-    return tree_to_string(file_tree)
+    if as_text:
+        return tree_to_string(file_tree)
+    return file_tree
 
 
 # Validate the schema itself
@@ -53,6 +55,22 @@ def validate_schema(schema_data):
 
     return True, "Schema is valid."
 
+
+# Helper function to handle description output for Markdown
+def format_description_markdown(description):
+    if isinstance(description, list):
+        return "\n\n".join(description)  # Each string in the list on a new line
+    return description
+
+
+# Helper function to handle description output for DOCX
+def format_description_docx(doc, description):
+    if isinstance(description, list):
+        for line in description:
+            line = line.replace("<br>", "\n")
+            doc.add_paragraph(line)  # Each string in the list as a separate paragraph
+    else:
+        doc.add_paragraph(description)
 
 # Helper function to validate a file against a JSON schema
 def validate_jsonschema_file(zip_file, json_schema_path, file_path):
@@ -79,6 +97,57 @@ def validate_zipschema(zip_file, zipschema_path, file_path):
         return False, f"Validation failed for {file_path} using zipschema: {message}"
 
 
+# Validate a directory and its contents for canContain evaluator
+def validate_canContain(zip_file, canContain, zip_contents):
+    for item in canContain:
+        directory_path = item.get('path', '')
+        # Check if directory exists in the zip
+        if any(content.startswith(directory_path) for content in zip_contents):
+            # Apply any internal evaluators
+            for evaluator in ['allOf', 'anyOf', 'oneOf', 'noneOf']:
+                if evaluator in item:
+                    result, message = validate_evaluator(zip_file, item[evaluator], evaluator, zip_contents,
+                                                         directory_path)
+                    if not result:
+                        return False, message
+        else:
+            # If the directory is required but doesn't exist, raise an error
+            if item.get('required', False):
+                return False, f"Directory {directory_path} is required but not found in the zip file."
+    return True, "canContain validation passed."
+
+
+# General evaluator function
+def validate_evaluator(zip_file, elements, evaluator_type, zip_contents, directory_path=""):
+    one_of_found = 0
+    for element in elements:
+        element_path = os.path.join(directory_path, element['path']) if directory_path else element['path']
+        if element_path in zip_contents:
+            # Handle schema validation
+            if 'schema' in element:
+                schema_type = element['schema'].split('.')[-1].lower()
+                if schema_type == 'jsonschema':
+                    result, message = validate_jsonschema_file(zip_file, element['schema'], element_path)
+                    if not result:
+                        return False, message
+                elif schema_type == 'zipschema' or element['schema'] == 'self':
+                    if element['schema'] == 'self':
+                        result, message = validate_zip_against_schema(zip_file.filename, elements)
+                    else:
+                        result, message = validate_zipschema(zip_file, element['schema'], element_path)
+                    if not result:
+                        return False, message
+
+            # Check oneOf constraint
+            if evaluator_type == 'oneOf':
+                one_of_found += 1
+
+    if evaluator_type == 'oneOf' and one_of_found != 1:
+        return False, f"Exactly one file from 'oneOf' should be present in section: {evaluator_type}"
+
+    return True, f"{evaluator_type} validation passed."
+
+
 # Validate a zip file against the schema
 def validate_zip_against_schema(zip_path, schema_data):
     if not zipfile.is_zipfile(zip_path):
@@ -88,42 +157,15 @@ def validate_zip_against_schema(zip_path, schema_data):
         zip_contents = zfile.namelist()
 
         for element in schema_data.get('elements', []):
-            for key in ['allOf', 'anyOf', 'oneOf']:
-                if key in element:
-                    one_of_found = 0
-                    for item in element[key]:
-                        if item['path'] in zip_contents:
-                            # If the item has a schema field
-                            if 'schema' in item:
-                                schema_type = item['schema'].split('.')[-1].lower()
-
-                                # JSON schema validation
-                                if schema_type == 'jsonschema':
-                                    result, message = validate_jsonschema_file(zfile, item['schema'], item['path'])
-                                    if not result:
-                                        return False, message
-
-                                # zipschema recursive validation
-                                elif schema_type == 'zipschema' or item['schema'] == 'self':
-                                    if item['schema'] == 'self':
-                                        result, message = validate_zip_against_schema(zip_path, schema_data)
-                                    else:
-                                        result, message = validate_zipschema(zfile, item['schema'], item['path'])
-                                    if not result:
-                                        return False, message
-
-                            # Validation for oneOf
-                            if key == 'oneOf':
-                                one_of_found += 1
-
-                    if key == 'oneOf' and one_of_found != 1:
-                        return False, f"Exactly one file from 'oneOf' should be present in section: {element['section_title']}"
-
-            if 'noneOf' in element:
-                for prohibited_file in element['noneOf']:
-                    for zip_item in zip_contents:
-                        if zip_item.startswith(prohibited_file['path'].split('*')[0]):
-                            return False, f"Prohibited file found: {zip_item}"
+            for key in ['allOf', 'anyOf', 'oneOf', 'noneOf', 'canContain']:
+                if key == 'canContain':
+                    result, message = validate_canContain(zfile, element['canContain'], zip_contents)
+                    if not result:
+                        return False, message
+                else:
+                    result, message = validate_evaluator(zfile, element.get(key, []), key, zip_contents)
+                    if not result:
+                        return False, message
 
     return True, "Zip file contents are valid."
 
@@ -145,24 +187,7 @@ def add_borders_to_cells(table):
             tcPr.append(tcBorders)
 
 
-# Helper function to handle description output for Markdown
-def format_description_markdown(description):
-    if isinstance(description, list):
-        return "\n\n".join(description)  # Each string in the list on a new line
-    return description
-
-
-# Helper function to handle description output for DOCX
-def format_description_docx(doc, description):
-    if isinstance(description, list):
-        for line in description:
-            line = line.replace("<br>", "\n")
-            doc.add_paragraph(line)  # Each string in the list as a separate paragraph
-    else:
-        doc.add_paragraph(description)
-
-
-# Generate Markdown documentation with file table, section/conditional headings, and file items
+# Generate Markdown documentation with canContain evaluator
 def generate_markdown_with_tree(schema_data, output_file):
     file_tree = generate_file_tree(schema_data)
 
@@ -170,6 +195,8 @@ def generate_markdown_with_tree(schema_data, output_file):
 # {{ schema.name }}
 
 **Version:** {{ schema.version }}
+
+**Description:**
 
 {{ schema.description }}
 
@@ -180,7 +207,7 @@ def generate_markdown_with_tree(schema_data, output_file):
 | Filename | Summary | Section |
 |----------|---------|---------|
 {% for element in schema.elements %}
-{% for key, items in element.items() if key in ['allOf', 'anyOf', 'oneOf', 'noneOf', 'allowed'] %}
+{% for key, items in element.items() if key in ['allOf', 'anyOf', 'oneOf', 'noneOf', 'allowed', 'canContain'] %}
 {% for item in items %}
 | `{{ item.path }}` | {{ item.summary or '' }} | {{ element.section_title }} |
 {% endfor %}
@@ -192,10 +219,19 @@ def generate_markdown_with_tree(schema_data, output_file):
 ### {{ element.section_title }}
 {{ format_description_markdown(element.section_description) }}
 
-{% for key, items in element.items() if key in ['allOf', 'anyOf', 'oneOf', 'noneOf', 'allowed'] %}
+{% for key, items in element.items() if key in ['allOf', 'anyOf', 'oneOf', 'noneOf', 'allowed', 'canContain'] %}
 #### {{ key }}
 {% for item in items %}
 - **`{{ item.path }}`**: {{ item.description }} 
+  {% if key == 'canContain' %}
+    - Directory can contain the following:
+    {% for subkey, subitems in item.items() if subkey in ['allOf', 'anyOf', 'oneOf', 'noneOf'] %}
+      - **{{ subkey }}**:
+        {% for subitem in subitems %}
+          - `{{ subitem.path }}`: {{ subitem.description }}
+        {% endfor %}
+    {% endfor %}
+  {% endif %}
 {% endfor %}
 {% endfor %}
 {% endfor %}
@@ -214,9 +250,87 @@ def generate_markdown_with_tree(schema_data, output_file):
     return "Markdown documentation with file table, sections, conditionals, and file items generated."
 
 
-# Generate DOCX documentation with file table, section/conditional headings, and file items
+def set_keep_with_next(paragraph):
+    """
+    This function sets the 'keep with next' property on a paragraph.
+    It keeps the paragraph together with the next paragraph.
+    """
+    pPr = paragraph._element.get_or_add_pPr()  # Get the paragraph's properties
+    keepNext = OxmlElement('w:keepNext')  # Create a 'keepNext' element
+    pPr.append(keepNext)  # Append it to the paragraph properties
+
+def set_keep_together(paragraph):
+    """
+    This function sets the 'keep lines together' property on a paragraph.
+    It prevents the paragraph from being split across pages.
+    """
+    pPr = paragraph._element.get_or_add_pPr()  # Get the paragraph's properties
+    keepLines = OxmlElement('w:keepLines')  # Create a 'keepLines' element
+    pPr.append(keepLines)  # Append it to the paragraph properties
+
+def set_bullet_level(paragraph, level):
+    from docx.shared import Inches
+    paragraph.paragraph_format.left_indent = Inches(0.25 * level)  # Increase indent for each level
+    paragraph.style = 'ListBullet'
+
+
+def add_header(doc, header_text):
+    from docx.shared import Pt
+    section = doc.sections[0]  # Access the first section of the document
+    header = section.header
+    header_paragraph = header.paragraphs[0]
+    header_paragraph.text = header_text
+    header_paragraph.style = 'Header'  # Use the built-in 'Header' style
+
+
+# Function to add a footer with a page number
+def add_footer_with_page_number(doc):
+    from docx.shared import Pt
+    section = doc.sections[0]  # Access the first section of the document
+    footer = section.footer
+    footer_paragraph = footer.paragraphs[0]
+
+    # Create a page number field in the footer
+    run = footer_paragraph.add_run()
+    fldChar_begin = OxmlElement('w:fldChar')
+    fldChar_begin.set(qn('w:fldCharType'), 'begin')
+    instrText = OxmlElement('w:instrText')
+    instrText.set(qn('xml:space'), 'preserve')
+    instrText.text = "PAGE"
+    fldChar_end = OxmlElement('w:fldChar')
+    fldChar_end.set(qn('w:fldCharType'), 'end')
+
+    run._r.append(fldChar_begin)
+    run._r.append(instrText)
+    run._r.append(fldChar_end)
+
+    footer_paragraph.alignment = 2  # Align to the right
+
+def add_styles(doc):
+    from docx.shared import Pt
+    # Add a new style to the document
+    styles = doc.styles
+    codestyle = styles.add_style('CodeStyle', 2)  # 1 represents a paragraph style
+
+    # Set font to monospaced (e.g., Courier New)
+    codestyle.font.name = 'Courier New'
+    codestyle.font.size = Pt(10.5)
+
+    # Set background color (light gray)
+    for rPr in codestyle.element.xpath('.//w:rPr'):
+        shd = OxmlElement('w:shd')
+        shd.set(qn('w:val'), 'clear')
+        shd.set(qn('w:color'), 'auto')
+        shd.set(qn('w:fill'), 'D3D3D3')  # Hex code for light gray
+        rPr.append(shd)
+
+# Generate DOCX documentation with canContain evaluator
 def generate_docx_with_tree(schema_data, output_file):
     doc = docx.Document()
+
+    add_styles(doc)
+    add_header(doc,schema_data['name'])
+    add_footer_with_page_number(doc)
 
     # Title and version
     doc.add_heading(schema_data['name'], 0)
@@ -227,9 +341,17 @@ def generate_docx_with_tree(schema_data, output_file):
 
     doc.add_page_break()
     # File Tree Section
-    doc.add_heading('File Tree', level=1)
-    file_tree = generate_file_tree(schema_data)
-    doc.add_paragraph(file_tree)
+    set_keep_with_next(doc.add_heading('File Tree', level=1))
+    file_tree = generate_file_tree(schema_data, as_text=False)
+
+    def tree_to_doctree(tree, indent=0):
+        for key, subtree in tree.items():
+            p = doc.add_paragraph(f"{key}")
+            set_keep_with_next(p)
+            set_bullet_level(p, indent)
+            tree_to_doctree(subtree, indent + 1)
+
+    tree_to_doctree(file_tree,1)
 
     # File List Section (Table)
     doc.add_heading('File List', level=1)
@@ -240,7 +362,7 @@ def generate_docx_with_tree(schema_data, output_file):
     hdr_cells[2].text = 'Section'
 
     for element in schema_data.get('elements', []):
-        for key in ['allOf', 'anyOf', 'oneOf', 'noneOf', 'allowed']:
+        for key in ['allOf', 'anyOf', 'oneOf', 'noneOf', 'allowed', 'canContain']:
             if key in element:
                 for item in element[key]:
                     row_cells = table.add_row().cells
@@ -250,30 +372,45 @@ def generate_docx_with_tree(schema_data, output_file):
 
     # Add borders to table
     add_borders_to_cells(table)
+    doc.add_page_break()
 
-    doc.add_section()
+    def add_section_text(item, level=0):
+        p = doc.add_paragraph()
+        if item.get("description") is not None:
+            p.add_run(f"{chr(9)*level}{item['path']}\n").bold = True
+            p.add_run(f"{chr(9)*level}{item['description']}")
+        else:
+            if item.get("summary") is not None:
+                p.add_run(f"{chr(9)*level}{item['path']}: ").bold = True
+                p.add_run(f"{chr(9)*level}{item['summary']}")
+            else:
+                p.add_run(f"{chr(9)*level}'{item['path']}' ").bold = True
+
+        if item.get("example"):
+            p.add_run(f"\n{chr(9)*level}example: ").italic = True
+            p.add_run(item.get("example"), style="CodeStyle")
 
     # Section List
     for element in schema_data.get('elements', []):
+        doc.add_section()
         # Section Title
-        doc.add_heading(element['section_title'], level=2)
+        doc.add_heading(element['section_title'], level=1)
         format_description_docx(doc, element['section_description'])
 
-        # Conditional sub-sections (allOf, anyOf, oneOf, noneOf, allowed)
-        for key in ['allOf', 'anyOf', 'oneOf', 'noneOf', 'allowed']:
+        # Conditional sub-sections (allOf, anyOf, oneOf, noneOf, allowed, canContain)
+        for key in ['allOf', 'anyOf', 'oneOf', 'noneOf', 'allowed', 'canContain']:
             if key in element:
-                doc.add_heading(f"{key}:", level=3)
+                doc.add_heading(f"{key}: ", level=2)
                 for item in element[key]:
-                    p = doc.add_paragraph()
-                    if item.get("description") is not None:
-                        p.add_run(f"{item['path']}\n").bold = True
-                        p.add_run(f"{item['description']}")
+                    if key == 'canContain':
+                        add_section_text(item)
+                        for subkey in ['allOf', 'anyOf', 'oneOf', 'noneOf']:
+                            if subkey in item:
+                                doc.add_heading(f"\t{subkey}:", level=3)
+                                for subitem in item[subkey]:
+                                    add_section_text(subitem, 1)
                     else:
-                        if item.get("summary") is not None:
-                            p.add_run(f"{item['path']}: ").bold = True
-                            p.add_run(f"{item['summary']}")
-                        else:
-                            p.add_run(f"'{item['path']}' ").bold = True
+                        add_section_text(item,1)
 
     doc.save(output_file)
 
@@ -283,12 +420,12 @@ def generate_docx_with_tree(schema_data, output_file):
 # Command-line interface logic
 def main():
     parser = ArgumentParser(description="Schema validator and zip file validator with documentation generator.")
-    parser.add_argument('mode', choices=['validate-schema', 'validate-zip', 'generate-doc'],
+    parser.add_argument('mode', choices=['validate_schema', 'validate_zip', 'generate_doc'],
                         help="The mode to run the tool in.")
     parser.add_argument('schema_file', help="Path to the zipschema YAML file.")
     parser.add_argument('--zipfile', help="Path to the zip file (required for zip validation).")
     parser.add_argument('--output', help="Path for the documentation output (optional for doc generation).")
-    parser.add_argument('--format', choices=['markdown', 'docx'], default="markdown", help="Documentation format (markdown or docx).")
+    parser.add_argument('--format', choices=['markdown', 'docx'], help="Documentation format (markdown or docx).")
 
     args = parser.parse_args()
 
@@ -297,18 +434,18 @@ def main():
         schema_data = yaml.safe_load(schema_file)
 
     # Handle the different modes
-    if args.mode == 'validate-schema':
+    if args.mode == 'validate_schema':
         valid, message = validate_schema(schema_data)
         print(message)
 
-    elif args.mode == 'validate-zip':
+    elif args.mode == 'validate_zip':
         if not args.zipfile:
             print("Zip file path is required for zip validation.")
             return
         valid, message = validate_zip_against_schema(args.zipfile, schema_data)
         print(message)
 
-    elif args.mode == 'generate-doc':
+    elif args.mode == 'generate_doc':
         if not args.format:
             print("Format is required for documentation generation.")
             return
