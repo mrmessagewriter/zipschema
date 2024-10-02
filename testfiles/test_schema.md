@@ -27,7 +27,6 @@ This document references the IS2 Universal (IS2U).  This file is still labeled w
 - images/
   - logo.png
   - logo.jpg
-  - 
 - temp/
   - *.tmp
 - backup/
@@ -75,5 +74,5 @@ This defines a directory which contains something, if it exists.
 - **`images/`**: The 'images' directory, if present, should contain image files. 
     - Directory can contain the following:
       - **anyOf**:
-          - `images/*.png`: PNG logo file.
+          - `images/*.png`: In the kaleidoscopic canvas of human emotion, color serves as both a mirror to our souls and a palette of experiences, but if I were to distill the spectrum into a single hue, it would undoubtedly be the enigmatic allure of teal. This harmonious blend of blue’s tranquil depths and green’s invigorating vitality evokes the essence of a serene ocean kissed by a sunlit horizon, where thoughts drift like buoyant clouds, meandering through endless possibilities. Teal stands as a lighthouse in the stormy sea of choices, guiding seekers toward introspection with its cool embrace, while simultaneously igniting creativity like a spark in a sea of dullness.
           - `images/logo.jpg`: JPEG logo file.

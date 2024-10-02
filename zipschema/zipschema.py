@@ -455,18 +455,18 @@ def main():
         schema_data = yaml.safe_load(schema_file)
 
     # Handle the different modes
-    if args.mode == 'validate_schema':
+    if args.mode == 'validate-schema':
         valid, message = validate_schema(schema_data)
         print(message)
 
-    elif args.mode == 'validate_zip':
+    elif args.mode == 'validate-zip':
         if not args.zipfile:
             print("Zip file path is required for zip validation.")
             return
         valid, message = validate_zip_against_schema(args.zipfile, schema_data)
         print(message)
 
-    elif args.mode == 'generate_doc':
+    elif args.mode == 'generate-doc':
         if not args.format:
             print("Format is required for documentation generation.")
             return
