@@ -15,11 +15,17 @@ def generate_file_tree(schema_data, as_text=True):
     file_paths = []
 
     # Collect all file paths
-    for element in schema_data.get('elements', []):
+    def collect_file_paths(element):
         for key in ['allOf', 'anyOf', 'oneOf', 'noneOf', 'allowed', 'canContain']:
             if key in element:
-                for item in element[key]:
-                    file_paths.append(item['path'])
+                if key != "canContain":
+                    for item in element[key]:
+                        file_paths.append(item['path'])
+                else:
+                    collect_file_paths(element[key])
+
+    for element in schema_data.get('elements', []):
+        collect_file_paths(element)
 
     # Create file tree structure (basic indentation)
     file_tree = {}
@@ -65,12 +71,15 @@ def format_description_markdown(description):
 
 # Helper function to handle description output for DOCX
 def format_description_docx(doc, description):
+    result = []
     if isinstance(description, list):
         for line in description:
             line = line.replace("<br>", "\n")
-            doc.add_paragraph(line)  # Each string in the list as a separate paragraph
+            result.append(doc.add_paragraph(line))  # Each string in the list as a separate paragraph
     else:
-        doc.add_paragraph(description)
+        result.append(doc.add_paragraph(description))
+    return result
+
 
 # Helper function to validate a file against a JSON schema
 def validate_jsonschema_file(zip_file, json_schema_path, file_path):
@@ -268,11 +277,13 @@ def set_keep_together(paragraph):
     keepLines = OxmlElement('w:keepLines')  # Create a 'keepLines' element
     pPr.append(keepLines)  # Append it to the paragraph properties
 
-def set_bullet_level(paragraph, level):
+def set_level(paragraph, level):
     from docx.shared import Inches
     paragraph.paragraph_format.left_indent = Inches(0.25 * level)  # Increase indent for each level
-    paragraph.style = 'ListBullet'
 
+def set_bullet_level(paragraph, level):
+    set_level(paragraph, level)
+    paragraph.style = 'ListBullet'
 
 def add_header(doc, header_text):
     from docx.shared import Pt
@@ -376,37 +387,47 @@ def generate_docx_with_tree(schema_data, output_file):
 
     def add_section_text(item, level=0):
         p = doc.add_paragraph()
+        set_keep_together(p)
         if item.get("description") is not None:
-            p.add_run(f"{chr(9)*level}{item['path']}\n").bold = True
-            p.add_run(f"{chr(9)*level}{item['description']}")
+            p.add_run(f"{item['path']}\n").bold = True
+            p.add_run(f"{item['description']}")
         else:
             if item.get("summary") is not None:
-                p.add_run(f"{chr(9)*level}{item['path']}: ").bold = True
-                p.add_run(f"{chr(9)*level}{item['summary']}")
+                p.add_run(f"{item['path']}: ").bold = True
+                p.add_run(f"{item['summary']}")
             else:
-                p.add_run(f"{chr(9)*level}'{item['path']}' ").bold = True
+                p.add_run(f"'{item['path']}' ").bold = True
 
         if item.get("example"):
-            p.add_run(f"\n{chr(9)*level}example: ").italic = True
+            p.add_run(f"\nexample: ").italic = True
             p.add_run(item.get("example"), style="CodeStyle")
+        set_level(p, level)
+        return p
 
     # Section List
     for element in schema_data.get('elements', []):
-        doc.add_section()
         # Section Title
-        doc.add_heading(element['section_title'], level=1)
-        format_description_docx(doc, element['section_description'])
+        p = doc.add_heading(element['section_title'], level=1)
+        set_keep_with_next(p)
+        pees = format_description_docx(doc, element['section_description'])
+        for p in pees:
+            set_keep_with_next(p)
 
         # Conditional sub-sections (allOf, anyOf, oneOf, noneOf, allowed, canContain)
         for key in ['allOf', 'anyOf', 'oneOf', 'noneOf', 'allowed', 'canContain']:
             if key in element:
-                doc.add_heading(f"{key}: ", level=2)
+                p = doc.add_heading(f"{key}: ", level=2)
+                set_keep_together(p)
+                set_keep_with_next(p)
                 for item in element[key]:
                     if key == 'canContain':
-                        add_section_text(item)
+                        p = add_section_text(item)
+                        set_keep_with_next(p)
                         for subkey in ['allOf', 'anyOf', 'oneOf', 'noneOf']:
                             if subkey in item:
-                                doc.add_heading(f"\t{subkey}:", level=3)
+                                p = doc.add_heading(f"{subkey}:", level=3)
+                                set_keep_with_next(p)
+                                set_level(p, level=1)
                                 for subitem in item[subkey]:
                                     add_section_text(subitem, 1)
                     else:
@@ -420,7 +441,7 @@ def generate_docx_with_tree(schema_data, output_file):
 # Command-line interface logic
 def main():
     parser = ArgumentParser(description="Schema validator and zip file validator with documentation generator.")
-    parser.add_argument('mode', choices=['validate_schema', 'validate_zip', 'generate_doc'],
+    parser.add_argument('mode', choices=['validate-schema', 'validate-zip', 'generate-doc'],
                         help="The mode to run the tool in.")
     parser.add_argument('schema_file', help="Path to the zipschema YAML file.")
     parser.add_argument('--zipfile', help="Path to the zip file (required for zip validation).")

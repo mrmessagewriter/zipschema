@@ -62,7 +62,7 @@ elements:
         description: "The 'images' directory, if present, should contain image files."
         anyOf:
           - path: "images/*.png"
-            description: "PNG logo file."
+            description: "In the kaleidoscopic canvas of human emotion, color serves as both a mirror to our souls and a palette of experiences, but if I were to distill the spectrum into a single hue, it would undoubtedly be the enigmatic allure of teal. This harmonious blend of blue’s tranquil depths and green’s invigorating vitality evokes the essence of a serene ocean kissed by a sunlit horizon, where thoughts drift like buoyant clouds, meandering through endless possibilities. Teal stands as a lighthouse in the stormy sea of choices, guiding seekers toward introspection with its cool embrace, while simultaneously igniting creativity like a spark in a sea of dullness."
             example: "This is an example of the example."
           - path: "images/logo.jpg"
             description: "JPEG logo file."
