@@ -390,7 +390,7 @@ def generate_docx_with_tree(schema_data, output_file):
         set_keep_together(p)
         if item.get("description") is not None:
             p.add_run(f"{item['path']}\n").bold = True
-            p.add_run(f"{item['description']}")
+            p.add_run(item['description'].replace("<br>", "\n"))
         else:
             if item.get("summary") is not None:
                 p.add_run(f"{item['path']}: ").bold = True
