@@ -22,7 +22,8 @@ def generate_file_tree(schema_data, as_text=True):
                     for item in element[key]:
                         file_paths.append(item['path'])
                 else:
-                    collect_file_paths(element[key])
+                    for subelement in element[key]:
+                        collect_file_paths(subelement)
 
     for element in schema_data.get('elements', []):
         collect_file_paths(element)
@@ -389,7 +390,7 @@ def generate_docx_with_tree(schema_data, output_file):
         p = doc.add_paragraph()
         set_keep_together(p)
         if item.get("description") is not None:
-            p.add_run(f"{item['path']}\n").bold = True
+            p.add_run(f"{item['path']}\n\n    ").bold = True
             p.add_run(item['description'].replace("<br>", "\n"))
         else:
             if item.get("summary") is not None:
@@ -399,7 +400,7 @@ def generate_docx_with_tree(schema_data, output_file):
                 p.add_run(f"'{item['path']}' ").bold = True
 
         if item.get("example"):
-            p.add_run(f"\nexample: ").italic = True
+            p.add_run(f"\n\nexample: \n    ").italic = True
             p.add_run(item.get("example"), style="CodeStyle")
         set_level(p, level)
         return p
