@@ -81,30 +81,51 @@ def format_description_docx(doc, description):
         result.append(doc.add_paragraph(description))
     return result
 
+import os
+import requests
+import yaml
+import json
+from urllib.parse import urlparse
+
+def load_schema(schema_path):
+    parsed_url = urlparse(schema_path)
+    if parsed_url.scheme in ("http", "https"):
+        response = requests.get(schema_path)
+        response.raise_for_status()  # Raises an error for bad status codes
+        if schema_path.endswith('.jsonschema'):
+            return response.json()
+        elif schema_path.endswith('.zipschema'):
+            return yaml.safe_load(response.text)
+    else:
+        with open(schema_path, 'r') as schema_file:
+            if schema_path.endswith('.jsonschema'):
+                return json.load(schema_file)
+            elif schema_path.endswith('.zipschema'):
+                return yaml.safe_load(schema_file)
+
+    raise ValueError(f"Unsupported schema file format: {schema_path}")
 
 # Helper function to validate a file against a JSON schema
 def validate_jsonschema_file(zip_file, json_schema_path, file_path):
     with zip_file.open(file_path) as json_file:
         json_data = json.load(json_file)
-        with open(json_schema_path, 'r') as schema_file:
-            json_schema = json.load(schema_file)
-            try:
-                jsonschema.validate(instance=json_data, schema=json_schema)
-                return True, f"{file_path} is valid according to the JSON schema."
-            except jsonschema.exceptions.ValidationError as e:
-                return False, f"Validation failed for {file_path}: {str(e)}"
-
+        json_schema = load_schema(json_schema_path)
+        try:
+            jsonschema.validate(instance=json_data, schema=json_schema)
+            return True, f"{file_path} is valid according to the JSON schema."
+        except jsonschema.exceptions.ValidationError as e:
+            return False, f"Validation failed for {file_path}: {str(e)}"
 
 # Helper function to recursively validate using zipschema
 def validate_zipschema(zip_file, zipschema_path, file_path):
-    with open(zipschema_path, 'r') as schema_file:
-        zipschema = yaml.safe_load(schema_file)
+    zipschema = load_schema(zipschema_path)
     # Recursively validate the zip file using the zipschema
     result, message = validate_zip_against_schema(zip_file.filename, zipschema)
     if result:
         return True, f"{file_path} validated successfully using zipschema."
     else:
         return False, f"Validation failed for {file_path} using zipschema: {message}"
+
 
 
 # Validate a directory and its contents for canContain evaluator
