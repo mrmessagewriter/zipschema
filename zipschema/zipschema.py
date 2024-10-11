@@ -473,8 +473,7 @@ def main():
     args = parser.parse_args()
 
     # Load the schema file
-    with open(args.schema_file, 'r') as schema_file:
-        schema_data = yaml.safe_load(schema_file)
+    schema_data = load_schema(args.schema_file)
 
     # Handle the different modes
     if args.mode == 'validate-schema':
